@@ -27,7 +27,7 @@ class ModelFactory:
     
     @staticmethod
     def init_params(params: Dict[str, Any]) -> Dict[str, Any]:
-        init = lambda key, value: (
+        init = lambda key, value: (  # noqa: E731
             ModelFactory.init_activation(value) # init activation
             if key == 'act_func' or key == 'out_func'
             else value

@@ -1,7 +1,8 @@
-from typing import Optional, Tuple, List, Dict, ClassVar, Any
+from typing import Optional, Tuple, List, ClassVar
 from pathlib import Path
 from tqdm import tqdm
-import wandb, json
+import wandb
+import json
 
 import torch.nn as nn
 import torch.optim as optim
@@ -20,26 +21,23 @@ from zeroptim.optim.smartes import SmartES
 
 
 class ZeroptimTrainer:
-
-    # Assuming we run from root of project directory
+    # Assuming we run from root of project directory
     OUTPUT_DIR: ClassVar[Path] = Path.cwd() / "outputs"
 
     def __init__(
-        self, 
+        self,
         model: nn.Module,
         dataloader: D.DataLoader,
         optimizer: optim.Optimizer,
         criterion: nn.Module,
-        run_config: Config
+        run_config: Config,
     ) -> None:
-        
         # initialize trainer
         self.model = model
         self.loader = dataloader
         self.opt = optimizer
         self.crit = criterion
         self.config = run_config
-
 
     @staticmethod
     def from_config(config: Config) -> "ZeroptimTrainer":
@@ -49,6 +47,12 @@ class ZeroptimTrainer:
         criterion = OptimFactory.init_criterion(config)
         return ZeroptimTrainer(model, dataloader, optimizer, criterion, config)
 
+    def compute_accuracy(self, outputs, targets):
+        _, predicted = torch.max(outputs.data, 1)
+        total = targets.size(0)
+        correct = (predicted == targets).sum().item()
+        accuracy = 100 * correct / total
+        return accuracy
 
     def train(
         self,
@@ -56,10 +60,9 @@ class ZeroptimTrainer:
         max_iters: Optional[int | None] = None,
         val_loader: Optional[D.DataLoader] = None,
     ) -> Tuple[List[float], List[float], List[float]]:
-        
         self.activate_wnb()
 
-         # initialize output directory
+        # initialize output directory
         rn = self.config.wandb.run_name
         ts = self.config.wandb.timestamp
         self.BASE = Path(self.OUTPUT_DIR / "-".join((ts, rn)))
@@ -74,40 +77,45 @@ class ZeroptimTrainer:
                 utils.set_attr(self.model, name.split("."), p)
             return self.crit(self.model(inputs), targets)
 
-        def closure(inputs, targets, with_backward=False):
+        def closure(outputs, targets, with_backward=False):
             # optimization-step closure
             self.opt.zero_grad()
-            loss = self.crit(self.model(inputs), targets)
+            loss = self.crit(outputs, targets)
             if with_backward:
                 loss.backward()
             return loss
+        
+        iters_per_epoch = len(self.loader)
 
         # initialize metrics
         n_epochs, n_iters = 0, 0
-        n_iters_tot = len(self.loader) * epochs
-        train_losses, val_losses = [], []
-        train_losses_per_iter = []
-        jvps, vhvs = [], []
+        n_iters_tot = iters_per_epoch * epochs
+        train_loss, val_loss, train_acc = [], [], []
+        train_loss_per_iter, train_acc_per_iter = [], []
+        jvps_per_iter, vhvs_per_iter = [], []
 
         self.model.train()
         for epoch_idx in (pbar := tqdm(range(epochs))):
-            if max_iters is not None and n_iters >= max_iters: break
+            if max_iters is not None and n_iters >= max_iters:
+                break
             epoch_loss = 0
 
             for batch_idx, (inputs, targets) in enumerate(self.loader):
-                if max_iters is not None and n_iters >= max_iters: break
-                
+                if max_iters is not None and n_iters >= max_iters:
+                    break
+
                 device = self.config.env.device
                 inputs, targets = inputs.to(device), targets.to(device)
                 assert len(inputs.shape) >= 2, "Need a batch size dimension!"
                 inputs = inputs.view(inputs.shape[0], -1)  # flatten for MLP
+                outputs = self.model(inputs)
 
                 prev_params = tuple([p.clone() for p in self.model.parameters()])
 
                 # take optimization step
                 loss = self.opt.step(
                     lambda: closure(
-                        inputs,
+                        outputs,
                         targets,
                         with_backward=not isinstance(self.opt, (MeZO, SmartES)),
                     )
@@ -129,16 +137,21 @@ class ZeroptimTrainer:
                 utils.restore_functional(self.model, tmp_params, names)
 
                 # append metrics
-                train_losses_per_iter.append(loss.item())
-                jvps.append(jvp.item())
-                vhvs.append(vhv.item())
+                train_loss_per_iter.append(loss.item())
+                train_acc_per_iter.append(self.compute_accuracy(outputs, targets))
+                jvps_per_iter.append(jvp.item())
+                vhvs_per_iter.append(vhv.item())
                 epoch_loss += loss.item()
 
-                wandb.log({
-                    "train_loss": train_losses_per_iter[-1],
-                    "jvp": jvps[-1],
-                    "vhv": vhvs[-1],
-                })
+                wandb.log(
+                    {
+                        "iter": n_iters,
+                        "train_loss_per_iter": train_loss_per_iter[-1],
+                        "train_accuracy_per_iter": train_acc_per_iter[-1],
+                        "jvp": jvps_per_iter[-1],
+                        "vhv": vhvs_per_iter[-1],
+                    }
+                )
 
                 # update tqdm progress bar
                 pbar.set_description(
@@ -148,12 +161,21 @@ class ZeroptimTrainer:
                 n_iters += 1
 
             # append average train loss for current epoch
-            train_losses.append(epoch_loss / len(self.loader))
+            train_loss.append(epoch_loss / iters_per_epoch)
+            train_acc.append(sum(train_acc_per_iter[-iters_per_epoch:]) / iters_per_epoch)
+
+            wandb.log(
+                {
+                    "epoch": epoch_idx,
+                    "train_loss_per_epoch": train_loss[-1],
+                    "train_accuracy_per_epoch": train_acc[-1],
+                }
+            )
 
             # evaluate on validation set
             if val_loader is not None:
                 val_loss = self.test(val_loader)
-                val_losses.append(val_loss)
+                val_loss.append(val_loss)
 
             n_epochs += 1
 
@@ -163,18 +185,20 @@ class ZeroptimTrainer:
             "model": self.model.__class__.__name__.lower(),
             "n_epochs": n_epochs,
             "n_iters": n_iters,
-            "train_losses": train_losses,
-            "train_losses_per_iter": train_losses_per_iter,
-            **({"val_losses": val_losses} if val_losses else {}),
-            "jvps": jvps,
-            "vhvs": vhvs,
+            "train_loss_per_epoch": train_loss,
+            **({"val_loss_per_epoch": val_loss} if val_loss else {}),
+            "train_acc_per_epoch": train_acc,
+            "train_loss_per_iter": train_loss_per_iter,
+            "train_acc_per_iter": train_acc_per_iter,
+            "jvps_per_iter": jvps_per_iter,
+            "vhvs_per_iter": vhvs_per_iter,
         }
 
-        # save results to disk
+        # save results to disk
         with open(self.BASE / "results.json", "w") as f:
             json.dump(res, f, indent=4)
 
-        # save final checkpoint to disk
+        # save final checkpoint to disk
         pth = Path(self.BASE / "checkpoints")
         pth.mkdir(parents=True, exist_ok=True)
         filename = f"epoch_{res['n_epochs']-1}.pt"
@@ -182,16 +206,11 @@ class ZeroptimTrainer:
 
         return res
 
-
-    def test(
-        self,
-        test_loader: D.DataLoader
-    ) -> float:
-        
+    def test(self, test_loader: D.DataLoader) -> Tuple[float, float]:
         self.model.eval()
 
         # initialize metrics
-        total_loss, total_samples = 0, 0
+        total_loss, total_samples, correct_predictions = 0, 0, 0
 
         with torch.no_grad():
             for batch_idx, (inputs, targets) in enumerate(test_loader):
@@ -199,23 +218,24 @@ class ZeroptimTrainer:
                 inputs, targets = inputs.to(device), targets.to(device)
                 assert len(inputs.shape) >= 2, "Need a batch size dimension!"
                 inputs = inputs.view(inputs.shape[0], -1)  # flatten for MLP
-                loss = self.crit(self.model(inputs), targets)
+                outputs = self.model(inputs)
+                loss = self.crit(outputs, targets)
                 total_loss += loss.item() * inputs.size(0)
                 total_samples += inputs.size(0)
+                correct_predictions += (outputs == targets).sum().item()
 
         avg_loss = total_loss / total_samples
+        avg_accuracy = 100 * correct_predictions / total_samples
 
-        return avg_loss
-
+        return avg_loss, avg_accuracy
 
     def activate_wnb(self) -> None:
         wandb.init(
             project=self.config.wandb.project_name,
             name=self.config.wandb.run_name,
             mode=self.config.wandb.mode,
-            config=self.config.model_dump()
+            config=self.config.model_dump(),
         )
 
         if self.config.wandb.mode == "online":
             self.config.wandb.run_name = wandb.run.name
-            
