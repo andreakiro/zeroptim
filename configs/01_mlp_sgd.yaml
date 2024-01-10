@@ -25,7 +25,6 @@ model:
     hidden_dims: [1024, 512, 256, 128]
     output_dim: 10
     act_func: "relu"
-    out_func: "softmax"
     p_dropout: 0.0
     batch_norm: false
     bias: true
