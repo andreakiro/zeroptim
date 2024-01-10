@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator, root_validator
-from typing import Optional, Dict, Any, Union, Literal
+from typing import Optional, Dict, Any, Literal
 from datetime import datetime
 from faker import Faker
 import random

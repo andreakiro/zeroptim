@@ -2,7 +2,7 @@
 
 wandb:
   mode: online
-  project_name: "zeroptim"
+  project_name: zeroptim
   run_name: null
 
 env:
@@ -24,11 +24,11 @@ model:
     input_dim: 784
     hidden_dims: [1024, 512, 256, 128]
     output_dim: 10
-    act_func: "relu"
+    act_func: relu
     p_dropout: 0.0
     batch_norm: false
     bias: true
-    init: "xavier_uniform"
+    init: xavier_uniform
 
 optim:
   criterion_type: cross_entropy
