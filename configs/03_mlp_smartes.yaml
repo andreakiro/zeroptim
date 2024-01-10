@@ -1,0 +1,43 @@
+# 02_mlp_smartes.yaml
+
+wandb:
+  mode: online
+  project_name: "zeroptim"
+  run_name: null
+
+env:
+  device: cpu
+  dtype: float32
+  seed: 42
+
+dataset:
+  task: classification
+  name: mnist-digits
+  dataset_params:
+    batch_size: 64
+    shuffle: true
+    split: train
+
+model:
+  model_type: mlp
+  model_hparams:
+    input_dim: 784
+    hidden_dims: [1024, 512, 256, 128]
+    output_dim: 10
+    act_func: "relu"
+    out_func: "softmax"
+    p_dropout: 0.0
+    batch_norm: false
+    bias: true
+    init: "xavier_uniform"
+
+optim:
+  criterion_type: cross_entropy
+  optimizer_type: smartes
+  epsilon: 0.01
+  sub_optimizer_type: sgd
+  opt_params:
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    nesterov: false
