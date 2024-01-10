@@ -1,4 +1,0 @@
-# add hooks to compute top eigenvector of weight matrices @iters
-# add plot utils to explore outputs
-# add slurm launchers
-# add accuracy hookup
