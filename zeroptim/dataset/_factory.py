@@ -10,5 +10,5 @@ class DataLoaderFactory:
     @staticmethod
     def init_loader(config: Config) -> DataLoader:
         dataset_name: str = config.dataset.name
-        dataset_params: Dict[str, Any] = config.dataset.dataset_params or {}
+        dataset_params: Dict[str, Any] = config.dataset.params or {}
         return VisionDataset.make_loader(dataset_name, **dataset_params)
