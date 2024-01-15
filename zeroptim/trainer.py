@@ -29,6 +29,7 @@ class ZeroptimTrainer:
     LAYERWISE: bool = False
     OVER_LANDSCAPE: Literal["batch", "partial", "global"] = "partial"
     NUM_BATCHES: float = 10  # for partial landscape only
+    DIRECTED: bool = True
 
     def __init__(
         self,
@@ -128,15 +129,27 @@ class ZeroptimTrainer:
                 )
 
                 curr_params = tuple([p.clone() for p in self.model.parameters()])
-                vs = tuple(
-                    [
-                        p2.detach() - p1.detach()
-                        for p2, p1 in zip(curr_params, prev_params)
+                vs = [
+                    p2.detach() - p1.detach()
+                    for p2, p1 in zip(curr_params, prev_params)
+                ]
+
+                if self.DIRECTED:
+                    named_params = [
+                        (name, p.clone().detach())
+                        for name, p in self.model.named_parameters()
                     ]
-                )
+
+                    # compute jvp and hvp for each layer
+                    for idx, (name, weights) in enumerate(named_params):
+                        if "weight" in name:
+                            U, S, V = torch.linalg.svd(weights.data)
+                            u1, s1, v1 = U[:, 0], S[0], V[:, 0]
+                            vs[idx] = s1 * torch.outer(u1, v1)
 
                 # compute jvp and hvp for entire model
                 tmp_params, names = utils.make_functional(self.model)
+                vs = tuple(vs)
 
                 if self.OVER_LANDSCAPE == "batch":
                     _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, vs)
@@ -196,16 +209,19 @@ class ZeroptimTrainer:
                     ]
 
                     # compute jvp and hvp for each layer
-                    for idx, (name, _) in enumerate(named_params):
-                        if "weight" in name:
-                            tangent = [torch.zeros_like(v) for v in vs]
-                            tangent[idx] = vs[idx]
-                            tangent = tuple(tangent)
+                    for idx, (name, weights) in enumerate(named_params):
+                        tangent = [torch.zeros_like(v) for v in vs]
+
+                        if "weight" in name and self.DIRECTED:
+                            U, S, V = torch.linalg.svd(weights.data)
+                            u1, s1, v1 = U[:, 0], S[0], V[:, 0]
+                            tangent[idx] = s1 * torch.outer(u1, v1)
 
                         else:
-                            tangent = [torch.zeros_like(v) for v in vs]
+                            # tangent defined as last step
                             tangent[idx] = vs[idx]
-                            tangent = tuple(tangent)
+
+                        tangent = tuple(tangent)
 
                         tmp_params, names = utils.make_functional(self.model)
                         _, jvp = torch.autograd.functional.jvp(
