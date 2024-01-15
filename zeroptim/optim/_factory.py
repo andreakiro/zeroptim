@@ -4,13 +4,10 @@ import torch.nn as nn
 import torch.optim as optim
 
 from zeroptim.configs._types import Config
-from zeroptim.supported import (
-    __supported_optims__,
-    __supported_criterions__
-)
+from zeroptim.supported import __supported_optims__, __supported_criterions__
+
 
 class OptimFactory:
-
     @staticmethod
     def init_optimizer(config: Config, model: nn.Module) -> optim.Optimizer:
         optimizer_type: str = config.optim.optimizer_type
@@ -19,15 +16,19 @@ class OptimFactory:
         opt_params: Dict[str, Any] = config.optim.opt_params
 
         if optimizer_type in ["mezo", "smartes"]:
-            # return a zero-order optimizer 
+            # return a zero-order optimizer
             epsilon = config.optim.epsilon
             sub_opt_type = config.optim.sub_optimizer_type
-            sub_optimizer = __supported_optims__[sub_opt_type](model.parameters(), **opt_params)
-            
+            sub_optimizer = __supported_optims__[sub_opt_type](
+                model.parameters(), **opt_params
+            )
+
             if optimizer_type == "mezo":
                 return __supported_optims__[optimizer_type](sub_optimizer, epsilon)
             if optimizer_type == "smartes":
-                return __supported_optims__[optimizer_type](sub_optimizer, model, epsilon)
+                return __supported_optims__[optimizer_type](
+                    sub_optimizer, model, epsilon
+                )
 
         return __supported_optims__[optimizer_type](model.parameters(), **opt_params)
 
