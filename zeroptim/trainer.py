@@ -137,9 +137,8 @@ class ZeroptimTrainer:
                 vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
                 utils.restore_functional(self.model, tmp_params, names)
 
+                dict = {}
                 if self.LAYERWISE:
-                    dict = {}
-
                     named_params = [
                         (name, p.clone().detach())
                         for name, p in self.model.named_parameters()
@@ -151,12 +150,8 @@ class ZeroptimTrainer:
                         tangent[idx] = vs[idx]
                         tangent = tuple(tangent)
                         tmp_params, names = utils.make_functional(self.model)
-                        _, jvp = torch.autograd.functional.jvp(
-                            func_fwd_layer, prev_params, tangent
-                        )
-                        _, hvp = torch.autograd.functional.hvp(
-                            func_fwd_layer, prev_params, tangent
-                        )
+                        _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, tangent)
+                        _, hvp = torch.autograd.functional.hvp(func_fwd, prev_params, tangent)
                         vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
                         utils.restore_functional(self.model, tmp_params, names)
                         dict["jvp_" + name] = jvp.item()
