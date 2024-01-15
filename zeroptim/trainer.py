@@ -1,6 +1,7 @@
-from typing import Optional, Tuple, List, ClassVar
+from typing import Optional, Tuple, List, ClassVar, Literal
 from pathlib import Path
 from tqdm import tqdm
+import random
 import wandb
 import json
 
@@ -24,6 +25,8 @@ class ZeroptimTrainer:
     # Assuming we run from root of project directory
     OUTPUT_DIR: ClassVar[Path] = Path.cwd() / "outputs"
     LAYERWISE: bool = False
+    OVER_LANDSCAPE: Literal["batch", "partial", "global"] = "partial"
+    PERCENTAGE: float = 0.02
 
     def __init__(
         self,
@@ -76,7 +79,35 @@ class ZeroptimTrainer:
         def func_fwd(*model_params):
             for name, p in zip(names, model_params):
                 utils.set_attr(self.model, name.split("."), p)
-            return self.crit(self.model(inputs), targets)
+
+            if self.OVER_LANDSCAPE == "batch":
+                return self.crit(self.model(inputs), targets)
+
+            if self.OVER_LANDSCAPE == "partial":
+                global_loss, global_count = 0.0, 0.0
+                num_batches = int(len(self.loader) * self.PERCENTAGE)
+                sampled_batch_idx = random.sample(range(len(self.loader)), num_batches)
+
+                for i, (inps, trgts) in enumerate(self.loader):
+                    if i in sampled_batch_idx:
+                        sz = inps.size(0)
+                        inps = inps.view(inps.shape[0], -1)
+                        loss = self.crit(self.model(inps), trgts)
+                        global_loss += loss.item() * sz
+                        global_count += sz
+
+                return torch.tensor(global_loss / global_count, requires_grad=True)
+
+            elif self.OVER_LANDSCAPE == "global":
+                global_loss, global_count = 0.0, 0.0
+                for inps, trgts in self.loader:
+                    sz = inps.size(0)
+                    inps = inps.view(inps.shape[0], -1)
+                    loss = self.crit(self.model(inps), trgts)
+                    global_loss += loss.item() * sz
+                    global_count += sz
+
+                return torch.tensor(global_loss / global_count, requires_grad=True)
 
         def closure(outputs, targets, with_backward=False):
             # optimization-step closure
@@ -150,8 +181,12 @@ class ZeroptimTrainer:
                         tangent[idx] = vs[idx]
                         tangent = tuple(tangent)
                         tmp_params, names = utils.make_functional(self.model)
-                        _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, tangent)
-                        _, hvp = torch.autograd.functional.hvp(func_fwd, prev_params, tangent)
+                        _, jvp = torch.autograd.functional.jvp(
+                            func_fwd, prev_params, tangent
+                        )
+                        _, hvp = torch.autograd.functional.hvp(
+                            func_fwd, prev_params, tangent
+                        )
                         vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
                         utils.restore_functional(self.model, tmp_params, names)
                         dict["jvp_" + name] = jvp.item()
