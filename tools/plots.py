@@ -158,7 +158,7 @@ def scatter_metrics_together(results):
     loss_jvps, jvps = filter_metrics_vs_loss(loss_, jvps_)
     loss_vhvs, vhvs = filter_metrics_vs_loss(loss_, vhvs_)
 
-    fig, axs = plt.subplots(2, 3, figsize=(24, 8))
+    fig, axs = plt.subplots(2, 3, figsize=(26, 10))
     cmap = plt.cm.viridis
 
     # FULL TRAINING JVP

@@ -2,14 +2,17 @@ import json
 from pathlib import Path
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
+from datetime import datetime
 import matplotlib
 import plots
+import os
 
 matplotlib.use("macosx")  # For a native macOS backend
 plt.ion()  # Turn on interactive mode
 
 OUTPUT_DIR: Path = Path.cwd() / "outputs"
 RESULT_FILE: str = "results.json"
+FIGURES = "figures"
 
 
 def read(filepath):
@@ -26,12 +29,26 @@ def last_result_filepath():
     return str(dirs[-1]) + "/" + RESULT_FILE
 
 
+def save_figures(filename):
+    if not os.path.exists(FIGURES):
+        os.makedirs(FIGURES)
+    figure_numbers = plt.get_fignums()
+    for i, fig_num in enumerate(figure_numbers, start=1):
+        fig = plt.figure(fig_num)
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        filename = f"{FIGURES}/{timestamp}-{filename}-{i:02d}.png"
+        fig.savefig(filename)
+
+
 parser = ArgumentParser()
 parser.add_argument("--filepath", type=str, default=None)
+parser.add_argument("--save", type=str, default=None)
 args = parser.parse_args()
 
 if __name__ == "__main__":
     filepath = args.filepath or last_result_filepath()
     results = read(filepath)
-    plots.scatter_metrics_separate(results)
+    plots.scatter_metrics_together(results)
+    if args.save:
+        save_figures(args.save)
     plt.show(block=True)
