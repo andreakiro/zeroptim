@@ -23,6 +23,7 @@ from zeroptim.optim.smartes import SmartES
 class ZeroptimTrainer:
     # Assuming we run from root of project directory
     OUTPUT_DIR: ClassVar[Path] = Path.cwd() / "outputs"
+    LAYERWISE: bool = False
 
     def __init__(
         self,
@@ -84,7 +85,7 @@ class ZeroptimTrainer:
             if with_backward:
                 loss.backward()
             return loss
-        
+
         iters_per_epoch = len(self.loader)
 
         # initialize metrics
@@ -129,12 +130,37 @@ class ZeroptimTrainer:
                     ]
                 )
 
-                # compute jvp and hvp
+                # compute jvp and hvp for entire model
                 tmp_params, names = utils.make_functional(self.model)
                 _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, vs)
                 _, hvp = torch.autograd.functional.hvp(func_fwd, prev_params, vs)
                 vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
                 utils.restore_functional(self.model, tmp_params, names)
+
+                if self.LAYERWISE:
+                    dict = {}
+
+                    named_params = [
+                        (name, p.clone().detach())
+                        for name, p in self.model.named_parameters()
+                    ]
+
+                    # compute jvp and hvp for each layer
+                    for idx, (name, _) in enumerate(named_params):
+                        tangent = [torch.zeros_like(v) for v in vs]
+                        tangent[idx] = vs[idx]
+                        tangent = tuple(tangent)
+                        tmp_params, names = utils.make_functional(self.model)
+                        _, jvp = torch.autograd.functional.jvp(
+                            func_fwd_layer, prev_params, tangent
+                        )
+                        _, hvp = torch.autograd.functional.hvp(
+                            func_fwd_layer, prev_params, tangent
+                        )
+                        vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
+                        utils.restore_functional(self.model, tmp_params, names)
+                        dict["jvp_" + name] = jvp.item()
+                        dict["vhv_" + name] = vhv.item()
 
                 # append metrics
                 train_loss_per_iter.append(loss.item())
@@ -148,8 +174,9 @@ class ZeroptimTrainer:
                         "iter": n_iters,
                         "train_loss_per_iter": train_loss_per_iter[-1],
                         "train_accuracy_per_iter": train_acc_per_iter[-1],
-                        "jvp": jvps_per_iter[-1],
-                        "vhv": vhvs_per_iter[-1],
+                        "jvp_global": jvps_per_iter[-1],
+                        "vhv_global": vhvs_per_iter[-1],
+                        **dict,
                     }
                 )
 
@@ -162,7 +189,9 @@ class ZeroptimTrainer:
 
             # append average train loss for current epoch
             train_loss.append(epoch_loss / iters_per_epoch)
-            train_acc.append(sum(train_acc_per_iter[-iters_per_epoch:]) / iters_per_epoch)
+            train_acc.append(
+                sum(train_acc_per_iter[-iters_per_epoch:]) / iters_per_epoch
+            )
 
             wandb.log(
                 {
