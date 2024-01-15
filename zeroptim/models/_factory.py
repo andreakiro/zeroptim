@@ -8,7 +8,7 @@ from zeroptim.supported import __supported_models__, __supported_activations__
 
 class ModelFactory:
     @staticmethod
-    def init_model(config: Config) -> nn.Module:
+    def get_model(config: Config) -> nn.Module:
         model_type: str = config.model.model_type
         if model_type not in __supported_models__:
             raise ValueError(f"Unsupported model type: {model_type}")
