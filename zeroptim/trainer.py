@@ -28,7 +28,7 @@ class ZeroptimTrainer:
     OUTPUT_DIR: ClassVar[Path] = Path.cwd() / "outputs"
     LAYERWISE: bool = False
     OVER_LANDSCAPE: Literal["batch", "partial", "global"] = "partial"
-    PERCENTAGE: float = 0.02  # percent out of approx. 1000 batches
+    NUM_BATCHES: float = 10  # for partial landscape only
 
     def __init__(
         self,
@@ -81,33 +81,7 @@ class ZeroptimTrainer:
         def func_fwd(*model_params):
             for name, p in zip(names, model_params):
                 utils.set_attr(self.model, name.split("."), p)
-
-            if self.OVER_LANDSCAPE == "batch":
-                return self.crit(self.model(inputs), targets)
-
-            elif self.OVER_LANDSCAPE == "partial":
-                global_loss, global_count = 0.0, 0.0
-                num_batches = int(self.PERCENTAGE * len(self.loader))
-
-                for inps, trgts in sample(self.loader, num_batches=num_batches):
-                    sz = inps.size(0)
-                    inps = inps.view(inps.shape[0], -1)
-                    loss = self.crit(self.model(inps), trgts)
-                    global_loss += loss.item() * sz
-                    global_count += sz
-
-                return torch.tensor(global_loss / global_count, requires_grad=True)
-
-            elif self.OVER_LANDSCAPE == "global":
-                global_loss, global_count = 0.0, 0.0
-                for inps, trgts in self.loader:
-                    sz = inps.size(0)
-                    inps = inps.view(inps.shape[0], -1)
-                    loss = self.crit(self.model(inps), trgts)
-                    global_loss += loss.item() * sz
-                    global_count += sz
-
-                return torch.tensor(global_loss / global_count, requires_grad=True)
+            return self.crit(self.model(inputs), targets)
 
         def closure(outputs, targets, with_backward=False):
             # optimization-step closure
@@ -163,9 +137,55 @@ class ZeroptimTrainer:
 
                 # compute jvp and hvp for entire model
                 tmp_params, names = utils.make_functional(self.model)
-                _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, vs)
-                _, hvp = torch.autograd.functional.hvp(func_fwd, prev_params, vs)
-                vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
+
+                if self.OVER_LANDSCAPE == "batch":
+                    _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, vs)
+                    _, hvp = torch.autograd.functional.hvp(func_fwd, prev_params, vs)
+                    vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
+                    jvp, vhv = jvp.item(), vhv.item()
+
+                elif self.OVER_LANDSCAPE == "partial":
+                    agg_jvp, agg_vhv, count = 0.0, 0.0, 0.0
+                    for inps, trgts in sample(
+                        self.loader, num_batches=self.NUM_BATCHES
+                    ):
+                        sz = inps.size(0)
+                        inputs, targets = inps.to(device), trgts.to(device)
+                        inputs = inputs.view(inputs.shape[0], -1)
+                        _, jvp_ = torch.autograd.functional.jvp(
+                            func_fwd, prev_params, vs
+                        )
+                        _, hvp_ = torch.autograd.functional.hvp(
+                            func_fwd, prev_params, vs
+                        )
+                        vhv_ = sum((v * hv).sum() for v, hv in zip(vs, hvp_))
+                        agg_jvp += jvp_.item() * sz
+                        agg_vhv += vhv_.item() * sz
+                        count += sz
+
+                    jvp = agg_jvp / count
+                    vhv = agg_vhv / count
+
+                elif self.OVER_LANDSCAPE == "global":
+                    agg_jvp, agg_vhv, count = 0.0, 0.0, 0.0
+                    for inps, trgts in self.loader:
+                        sz = inps.size(0)
+                        inputs, targets = inps.to(device), trgts.to(device)
+                        inputs = inputs.view(inputs.shape[0], -1)
+                        _, jvp_ = torch.autograd.functional.jvp(
+                            func_fwd, prev_params, vs
+                        )
+                        _, hvp_ = torch.autograd.functional.hvp(
+                            func_fwd, prev_params, vs
+                        )
+                        vhv_ = sum((v * hv).sum() for v, hv in zip(vs, hvp_))
+                        agg_jvp += jvp_.item() * sz
+                        agg_vhv += vhv_.item() * sz
+                        count += sz
+
+                    jvp = agg_jvp / count
+                    vhv = agg_vhv / count
+
                 utils.restore_functional(self.model, tmp_params, names)
 
                 dict = {}
@@ -202,8 +222,8 @@ class ZeroptimTrainer:
                 # append metrics
                 train_loss_per_iter.append(loss.item())
                 train_acc_per_iter.append(self.compute_accuracy(outputs, targets))
-                jvps_per_iter.append(jvp.item())
-                vhvs_per_iter.append(vhv.item())
+                jvps_per_iter.append(jvp)
+                vhvs_per_iter.append(vhv)
                 epoch_loss += loss.item()
 
                 wandb.log(
