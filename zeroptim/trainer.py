@@ -1,7 +1,6 @@
 from typing import Optional, Tuple, List, ClassVar, Literal
 from pathlib import Path
 from tqdm import tqdm
-import random
 import wandb
 import json
 
@@ -19,6 +18,9 @@ from zeroptim.configs import save
 import zeroptim.callbacks.functional as utils
 from zeroptim.optim.mezo import MeZO
 from zeroptim.optim.smartes import SmartES
+from zeroptim.dataset.utils import sample
+
+from loguru import logger
 
 
 class ZeroptimTrainer:
@@ -26,7 +28,7 @@ class ZeroptimTrainer:
     OUTPUT_DIR: ClassVar[Path] = Path.cwd() / "outputs"
     LAYERWISE: bool = False
     OVER_LANDSCAPE: Literal["batch", "partial", "global"] = "partial"
-    PERCENTAGE: float = 0.02
+    PERCENTAGE: float = 0.02  # percent out of approx. 1000 batches
 
     def __init__(
         self,
@@ -83,18 +85,16 @@ class ZeroptimTrainer:
             if self.OVER_LANDSCAPE == "batch":
                 return self.crit(self.model(inputs), targets)
 
-            if self.OVER_LANDSCAPE == "partial":
+            elif self.OVER_LANDSCAPE == "partial":
                 global_loss, global_count = 0.0, 0.0
-                num_batches = int(len(self.loader) * self.PERCENTAGE)
-                sampled_batch_idx = random.sample(range(len(self.loader)), num_batches)
+                num_batches = int(self.PERCENTAGE * len(self.loader))
 
-                for i, (inps, trgts) in enumerate(self.loader):
-                    if i in sampled_batch_idx:
-                        sz = inps.size(0)
-                        inps = inps.view(inps.shape[0], -1)
-                        loss = self.crit(self.model(inps), trgts)
-                        global_loss += loss.item() * sz
-                        global_count += sz
+                for inps, trgts in sample(self.loader, num_batches=num_batches):
+                    sz = inps.size(0)
+                    inps = inps.view(inps.shape[0], -1)
+                    loss = self.crit(self.model(inps), trgts)
+                    global_loss += loss.item() * sz
+                    global_count += sz
 
                 return torch.tensor(global_loss / global_count, requires_grad=True)
 
@@ -177,9 +177,16 @@ class ZeroptimTrainer:
 
                     # compute jvp and hvp for each layer
                     for idx, (name, _) in enumerate(named_params):
-                        tangent = [torch.zeros_like(v) for v in vs]
-                        tangent[idx] = vs[idx]
-                        tangent = tuple(tangent)
+                        if "weight" in name:
+                            tangent = [torch.zeros_like(v) for v in vs]
+                            tangent[idx] = vs[idx]
+                            tangent = tuple(tangent)
+
+                        else:
+                            tangent = [torch.zeros_like(v) for v in vs]
+                            tangent[idx] = vs[idx]
+                            tangent = tuple(tangent)
+
                         tmp_params, names = utils.make_functional(self.model)
                         _, jvp = torch.autograd.functional.jvp(
                             func_fwd, prev_params, tangent
