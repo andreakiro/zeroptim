@@ -15,4 +15,4 @@ freeze:
 
 .PHONY: clean
 clean:
-	rm -rf outputs wandb
+	rm -rf wandb
