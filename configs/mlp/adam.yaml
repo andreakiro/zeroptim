@@ -1,6 +1,7 @@
 wandb:
   mode: online
   project_name: zeroptim
+  run_name: null
 
 env:
   device: cpu
@@ -19,7 +20,7 @@ model:
   model_type: mlp
   model_hparams:
     input_dim: 784
-    hidden_dims: [1024, 512, 256, 128]
+    hidden_dims: [1024, 256, 32]
     output_dim: 10
     act_func: relu
     bias: true
@@ -40,5 +41,5 @@ optim:
   criterion_type: cross_entropy
   optimizer_type: adam
   opt_params:
-    lr: 0.01
+    lr: 0.001
     weight_decay: 1.0e-4

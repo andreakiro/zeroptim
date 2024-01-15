@@ -30,7 +30,9 @@ model:
 
 optim:
   criterion_type: cross_entropy
-  optimizer_type: sgd
+  optimizer_type: mezo
+  epsilon: 0.01
+  sub_optimizer_type: sgd
   opt_params:
     lr: 0.01
     weight_decay: 1.0e-4
