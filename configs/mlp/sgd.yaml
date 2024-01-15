@@ -1,7 +1,6 @@
 wandb:
   mode: online
   project_name: zeroptim
-  run_name: null
 
 env:
   device: cpu
@@ -11,7 +10,7 @@ env:
 dataset:
   task: classification
   name: mnist-digits
-  dataset_params:
+  params:
     batch_size: 64
     shuffle: true
     split: train
