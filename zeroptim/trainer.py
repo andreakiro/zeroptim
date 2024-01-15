@@ -27,9 +27,9 @@ class ZeroptimTrainer:
     # Assuming we run from root of project directory
     OUTPUT_DIR: ClassVar[Path] = Path.cwd() / "outputs"
     LAYERWISE: bool = False
-    OVER_LANDSCAPE: Literal["batch", "partial", "global"] = "partial"
+    OVER_LANDSCAPE: Literal["batch", "partial", "global"]
     NUM_BATCHES: float = 10  # for partial landscape only
-    DIRECTED: bool = True
+    DIRECTED: bool
 
     def __init__(
         self,
@@ -38,6 +38,8 @@ class ZeroptimTrainer:
         optimizer: optim.Optimizer,
         criterion: nn.Module,
         run_config: Config,
+        directed: bool = False,
+        over_landscape: str = "batch",
     ) -> None:
         # initialize trainer
         self.model = model
@@ -45,6 +47,8 @@ class ZeroptimTrainer:
         self.opt = optimizer
         self.crit = criterion
         self.config = run_config
+        self.DIRECTED = directed
+        self.OVER_LANDSCAPE = over_landscape
 
     @staticmethod
     def from_config(config: Config) -> "ZeroptimTrainer":
