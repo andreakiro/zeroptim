@@ -1,9 +1,6 @@
-# mlp.yaml
-
 wandb:
   mode: online
   project_name: zeroptim
-  run_name: null
 
 env:
   device: cpu
@@ -25,9 +22,9 @@ model:
     hidden_dims: [1024, 512, 256, 128]
     output_dim: 10
     act_func: relu
+    bias: true
     p_dropout: 0.0
     batch_norm: false
-    bias: true
     init: xavier_uniform
 
 optim:
@@ -36,5 +33,12 @@ optim:
   opt_params:
     lr: 0.01
     momentum: 0.9
-    weight_decay: 0.0
+    weight_decay: 1.0e-4
     nesterov: false
+
+optim:
+  criterion_type: cross_entropy
+  optimizer_type: adam
+  opt_params:
+    lr: 0.01
+    weight_decay: 1.0e-4
