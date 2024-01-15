@@ -2,6 +2,7 @@ data
 wandb
 outputs
 todos.txt
+*.dep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
