@@ -44,6 +44,13 @@ def sample(loader, num_batches=1):
         end_idx = min(start_idx + batch_size, len(dataset))
         batch_samples = [dataset[i] for i in range(start_idx, end_idx)]
 
+        if len(batch_samples) < batch_size:
+            # if batch_samples is less then batch_size, we need to pad it
+            # with first X samples from dataset to make it batch_size
+            batch_samples += [
+                dataset[i] for i in range(batch_size - len(batch_samples))
+            ]
+
         if collate_fn:
             batch = collate_fn(batch_samples)
         else:
