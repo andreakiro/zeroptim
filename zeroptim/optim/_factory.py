@@ -9,7 +9,7 @@ from zeroptim.supported import __supported_optims__, __supported_criterions__
 
 class OptimFactory:
     @staticmethod
-    def init_optimizer(config: Config, model: nn.Module) -> optim.Optimizer:
+    def get_optimizer(config: Config, model: nn.Module) -> optim.Optimizer:
         optimizer_type: str = config.optim.optimizer_type
         if optimizer_type not in __supported_optims__:
             raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
