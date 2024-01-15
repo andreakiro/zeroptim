@@ -1,154 +1,109 @@
 from typing import Optional
+from collections import OrderedDict
 import torch.nn as nn
 import torch
 
 
-class MLP(nn.Module):
-
+class LinearBlock(nn.Module):
     def __init__(
         self,
-        input_dim: int, 
-        hidden_dims: list[int],
-        output_dim: int,
+        in_features: int,
+        out_features: int,
         act_func: Optional[nn.Module] = None,
-        out_func: Optional[nn.Module] = None,
-        p_dropout: Optional[float] = 0.0,
-        batch_norm: Optional[bool] = False,
-        bias: Optional[bool] = True,
-        init: Optional[str] = 'xavier_uniform',
-        seed: Optional[int] = None
-    ) -> None:
-        super(MLP, self).__init__()
-        assert len(hidden_dims) >= 1
+        bias: bool = True,
+        use_batch_norm: bool = False,
+        p_dropout: float = 0.0,
+    ):
+        super(LinearBlock, self).__init__()
 
-        if seed is not None:
-            torch.manual_seed(seed)  # Set the seed
-
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        # Trick to create all hidden layers at once
-        self.hidden_dims = [input_dim] + hidden_dims
-
-        # Activation function on hidden layers (non-linearity)
-        self.act_func = act_func if act_func else nn.Identity()
-        # Output function on logits layer (post-processing)
-        self.out_func = out_func if out_func else nn.Identity()
-        
-        self.bias = bias # Whether to use biases (address underfitting issues)
-        self.p_dropout = p_dropout # Dropout probability (address overfitting issues)
-        self.batch_norm = batch_norm # Whether to use BN (address internal covariate shift)
-        self.init_method = init # Initialization method for weights and biases
-
-        self.layers = nn.Sequential(
-            # nn.Flatten(),
-            *[nn.Sequential(
-                nn.Linear(self.hidden_dims[i], self.hidden_dims[i+1], bias=self.bias),
-                *[nn.BatchNorm1d(self.hidden_dims[i+1])] if self.batch_norm else [],
-                self.act_func,
-                *[nn.Dropout(self.p_dropout)] if self.p_dropout > 0 else [],
-            ) for i in range(len(self.hidden_dims) - 1)],
-            # Logits layer separate: No additional processing modules
-            nn.Linear(self.hidden_dims[-1], self.output_dim, bias=self.bias),
+        modules = OrderedDict()
+        modules["linear"] = nn.Linear(
+            in_features=in_features, out_features=out_features, bias=bias
         )
+        # Batch norm requires B > 1 (otherwise ill defined) + not recommended with dropout
+        modules["bn"] = (
+            nn.BatchNorm1d(num_features=out_features)
+            if use_batch_norm
+            else nn.Identity()
+        )
+        modules["act_func"] = act_func if act_func else nn.Identity()
+        modules["dropout"] = nn.Dropout(p=p_dropout)
 
-        # Initialize weights and biases
-        for m in self.layers.modules():
-            if isinstance(m, nn.Linear):
-                if self.init_method == 'xavier_uniform':
-                    nn.init.xavier_uniform_(m.weight)
-                elif self.init_method == 'xavier_normal':
-                    nn.init.xavier_normal_(m.weight)
-                elif self.init_method == 'he_normal':
-                    nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
-                elif self.init_method == 'he_uniform':
-                    nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
-                elif self.init_method == 'zeros':
-                    nn.init.zeros_(m.weight)
-                elif self.init_method == 'ones':
-                    nn.init.ones_(m.weight)
-            
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
-
+        self.block = nn.Sequential(modules)
 
     def forward(self, x):
-        logits = self.layers(x)
-        return self.out_func(logits)
-    
-    
-    def norm(self):
-        return sum(p.norm() for p in self.layers.parameters() if p.requires_grad)
+        return self.block(x)
 
 
-    def count_params(self):
-        return sum(p.numel() for p in self.layers.parameters() if p.requires_grad)
+class MLP(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: list[int],
+        out_features: int,
+        act_func: Optional[nn.Module] = None,
+        out_func: Optional[nn.Module] = None,
+        bias: bool = True,
+        use_batch_norm: bool = False,
+        p_dropout: float = 0.0,
+        init: str = "xavier_uniform",
+        seed: Optional[int] = None,
+    ) -> None:
+        super(MLP, self).__init__()
+        assert len(hidden_features) >= 1
 
+        if seed is not None:
+            # seed for reproducibility
+            torch.manual_seed(seed)
 
-    def params(self):
-        params_list = [] # (weights, biases, BNs)
-        
-        # Iterate over child modules in MLP block
-        for module in self.layers.modules():
-            if isinstance(module, nn.Linear):
-                for param in module.parameters():
-                    params_list.append(param)
-            elif isinstance(module, nn.BatchNorm1d) and self.batch_norm:
-                for param in module.parameters():
-                    params_list.append(param)
+        self.out_func = out_func if out_func else nn.Identity()
 
-        return params_list
-    
-    
-    def weights(self):
-        weights_list = []
-        
-        # Iterate over child modules in MLP block
-        for module in self.layers.modules():
-            if isinstance(module, nn.Linear):
-                weights_list.append(module.weight)
+        layers = OrderedDict()
+        layers["flatten"] = nn.Flatten()
 
-        return weights_list
-    
+        hidden_dims = [in_features] + hidden_features
 
-    def biases(self):
-        biases_list = []
-        
-        # Iterate over child modules in MLP block
-        for module in self.layers.modules():
-            if isinstance(module, nn.Linear) and module.bias is not None:
-                biases_list.append(module.bias)
+        for i in range(len(hidden_dims) - 1):
+            layers[f"block-{i}"] = LinearBlock(
+                in_features=hidden_dims[i],
+                out_features=hidden_dims[i + 1],
+                act_func=act_func,
+                bias=bias,
+                use_batch_norm=use_batch_norm,
+                p_dropout=p_dropout,
+            )
 
-        return biases_list
-
-
-    def bns(self):
-        bns_list = []
-        
-        # Iterate over child modules in MLP block
-        for module in self.layers.modules():
-            if isinstance(module, nn.BatchNorm1d):
-                bns_list.append(module)
-
-        return bns_list
-    
-
-    def clone(self):
-        # Create a new instance of MLP with the same configuration
-        m_ = MLP(
-            input_dim=self.input_dim,
-            hidden_dims=self.hidden_dims[1:],  # exclude the first element as it's input_dim
-            output_dim=self.output_dim,
-            act_func=self.act_func,
-            out_func=self.out_func,
-            p_dropout=self.p_dropout,
-            batch_norm=self.batch_norm,
-            bias=self.bias,
-            init=self.init_method,
-            seed=None  # we don't want to replicate the seed (as already initialized)
+        layers["fc"] = nn.Linear(
+            in_features=hidden_dims[-1],
+            out_features=out_features,
+            bias=bias,
         )
 
-        # Copy the parameters and buffers from the current model
-        m_.load_state_dict(self.state_dict())
+        self.layers = nn.Sequential(layers)
+        self.init_weights(init)
+        self.penultimate = None
 
-        return m_
-    
+    def init_weights(self, init_method) -> None:
+        for layer in self.layers:
+            if isinstance(layer, LinearBlock):
+                for submodule in layer.modules():
+                    if isinstance(submodule, nn.Linear):
+                        self.apply_init(submodule, init_method)
+            elif isinstance(layer, nn.Linear):
+                self.apply_init(layer, init_method)
+
+    def apply_init(self, linear_layer, init_method):
+        if init_method == "xavier_uniform":
+            nn.init.xavier_uniform_(linear_layer.weight)
+        elif init_method == "xavier_normal":
+            nn.init.xavier_normal_(linear_layer.weight)
+        elif init_method == "he_normal":
+            nn.init.kaiming_normal_(linear_layer.weight, nonlinearity="relu")
+        elif init_method == "he_uniform":
+            nn.init.kaiming_uniform_(linear_layer.weight, nonlinearity="relu")
+
+    def forward(self, x):
+        self.penultimate = self.layers[:-1](x)
+        clf = self.layers[-1](self.penultimate)
+        logits = self.out_func(clf)
+        return logits

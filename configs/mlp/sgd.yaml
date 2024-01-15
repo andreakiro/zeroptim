@@ -18,13 +18,16 @@ dataset:
 model:
   model_type: mlp
   model_hparams:
-    input_dim: 784
-    hidden_dims: [1024, 256, 32]
-    output_dim: 10
+    in_features: 784
+    hidden_features: 
+    - 1024
+    - 256
+    - 32
+    out_features: 10
     act_func: relu
     bias: true
     p_dropout: 0.0
-    batch_norm: false
+    use_batch_norm: false
     init: xavier_uniform
 
 optim:

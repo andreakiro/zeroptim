@@ -52,7 +52,7 @@ class ZeroptimTrainer:
 
     @staticmethod
     def from_config(config: Config) -> "ZeroptimTrainer":
-        model = ModelFactory.init_model(config)
+        model = ModelFactory.get_model(config)
         dataloader = DataLoaderFactory.get_loader(config)
         optimizer = OptimFactory.get_optimizer(config, model)
         criterion = OptimFactory.init_criterion(config)
