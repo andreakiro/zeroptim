@@ -4,6 +4,7 @@ outputs
 todos.txt
 *.dep
 figures
+procs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

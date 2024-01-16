@@ -1,0 +1,48 @@
+wandb:
+  mode: online
+  project_name: zeroptim
+
+env:
+  device: cpu
+  dtype: float32
+  seed: 42
+
+dataset:
+  task: classification
+  name: mnist-digits
+  params:
+    batch_size: 64
+    shuffle: true
+    split: train
+
+model:
+  model_type: mlp
+  model_hparams:
+    in_features: 784
+    hidden_features:
+      - 1024
+      - 256
+      - 32
+    out_features: 10
+    act_func: relu
+    bias: true
+    p_dropout: 0.0
+    use_batch_norm: false
+    init: xavier_uniform
+
+optim:
+  criterion_type: cross_entropy
+  optimizer_type: sgd
+  opt_params:
+    lr: 0.01
+    weight_decay: 1.0e-4
+
+exp:
+  SWEEP.directed:
+    - true
+    - false
+  SWEEP.landscape:
+    - batch
+    - partial
+  n_batch: 10
+  layerwise: false
