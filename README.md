@@ -28,7 +28,7 @@ opt = MeZO(torch.optim.AdamW(model.parameters(), lr=0.005), eps=1e-3)
 ## Disclaimer
 Work in progress. May have bugs. Use at your discretion.
 
-## Update PyTorch
+## Update PyTorch
 
 ```python
 # in torch.autograd.functional
