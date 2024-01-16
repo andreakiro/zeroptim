@@ -113,9 +113,17 @@ class OptimConfig(BaseModel):
         return values
 
 
+class Experimental(BaseModel):
+    directed: bool = False
+    landscape: Literal["batch", "partial", "full"] = "batch"
+    n_batch: int = 10  # used if landscape == "partial"
+    layerwise: bool = False
+
+
 class Config(BaseModel):
     wandb: WandbConfig
     env: ExecutionConfig
     dataset: DatasetConfig
     model: ModelConfig
     optim: OptimConfig
+    exp: Experimental

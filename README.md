@@ -27,3 +27,12 @@ opt = MeZO(torch.optim.AdamW(model.parameters(), lr=0.005), eps=1e-3)
 
 ## Disclaimer
 Work in progress. May have bugs. Use at your discretion.
+
+## Update PyTorch
+
+```python
+# in torch.autograd.functional
+L358: def jvp(func, inputs, v=None, create_graph=False, strict=False, **kwargs):
+L437: outputs = func(*inputs, **kwargs)
+# and same for vhv!
+```

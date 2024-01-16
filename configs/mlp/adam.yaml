@@ -46,3 +46,8 @@ optim:
   opt_params:
     lr: 0.001
     weight_decay: 1.0e-4
+
+exp:
+  directed: false
+  landscape: batch
+  layerwise: false

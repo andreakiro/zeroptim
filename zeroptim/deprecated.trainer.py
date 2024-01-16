@@ -1,4 +1,5 @@
-from typing import Optional, Tuple, List, ClassVar, Literal
+from typing import Optional, Tuple, List, ClassVar, Literal, Dict, Any
+from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
 import wandb
@@ -83,7 +84,11 @@ class ZeroptimTrainer:
         print(f"Starting experiment {self.config.wandb.run_name}")
         print(f"Saving outputs and results to {self.BASE}")
 
-        def func_fwd(*model_params):
+        def func_fwd(*model_params, **kwargs):
+            # state-less functional forward pass
+            names = kwargs.get("state").get("names")
+            inputs = kwargs.get("state").get("inputs")
+            targets = kwargs.get("state").get("targets")
             for name, p in zip(names, model_params):
                 utils.set_attr(self.model, name.split("."), p)
             return self.crit(self.model(inputs), targets)
@@ -118,7 +123,7 @@ class ZeroptimTrainer:
                 device = self.config.env.device
                 inputs, targets = inputs.to(device), targets.to(device)
                 assert len(inputs.shape) >= 2, "Need a batch size dimension!"
-                inputs = inputs.view(inputs.shape[0], -1)  # flatten for MLP
+                # inputs = inputs.view(inputs.shape[0], -1)  # flatten for MLP
                 outputs = self.model(inputs)
 
                 prev_params = tuple([p.clone() for p in self.model.parameters()])
@@ -156,7 +161,13 @@ class ZeroptimTrainer:
                 vs = tuple(vs)
 
                 if self.OVER_LANDSCAPE == "batch":
-                    _, jvp = torch.autograd.functional.jvp(func_fwd, prev_params, vs)
+                    logger.info("batch?")
+                    _, jvp = torch.autograd.functional.jvp(
+                        func_fwd,
+                        prev_params,
+                        vs,
+                        state={"names": names, "inputs": inputs, "targets": targets},
+                    )
                     _, hvp = torch.autograd.functional.hvp(func_fwd, prev_params, vs)
                     vhv = sum((v * hv).sum() for v, hv in zip(vs, hvp))
                     jvp, vhv = jvp.item(), vhv.item()
