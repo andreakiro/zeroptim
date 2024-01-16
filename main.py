@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from zeroptim.configs import load
-from zeroptim.tr import ZeroptimTrainer
+from zeroptim.trainer import ZeroptimTrainer
 
 # parse command line
 parser = ArgumentParser()
