@@ -9,7 +9,7 @@ import generate as g
 
 parser = ArgumentParser()
 parser.add_argument("--sweep", type=str, help="path to config file", required=True)
-parser.add_argument("--epochs", type=int, help="number of training epochs", default=10)
+parser.add_argument("--epochs", type=int, help="number of training epochs", default=5)
 parser.add_argument("--iters", type=int, help="max total iterations", default=None)
 args = parser.parse_args()
 
@@ -27,7 +27,8 @@ def launch(configs):
         timestamp = time.strftime("%Y%m%d%H%M%S")
         sweepname = args.sweep.replace("/", "-")
         output_file = f"procs/{sweepname}/{timestamp}/{i}.txt"
-        command = f"python main.py --config {config} --epochs {args.epochs} --iters {args.iters}"
+        command = f"python main.py --config {config} --epochs {args.epochs}"
+        command = f"{command} --iters {args.iters}" if args.iters is not None else command
         pid, file = run(command, output_file)
         pids.append((pid))
 

@@ -91,7 +91,6 @@ class BaseTrainer(ABC):
         save(self.config, str(self.BASE / "config.yaml"))
 
         # run training loop
-        max_iters = int(max_iters) if max_iters else None
         metrics = self.train_loop(
             epochs=epochs, max_iters=max_iters, val_loader=val_loader
         )

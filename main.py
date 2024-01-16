@@ -6,7 +6,7 @@ from zeroptim.trainer import ZeroptimTrainer
 parser = ArgumentParser()
 parser.add_argument("--config", type=str, help="path to config file", required=True)
 parser.add_argument("--epochs", type=int, help="number of training epochs", default=10)
-parser.add_argument("--iters", help="max total iterations", default=None)
+parser.add_argument("--iters", type=int, help="max total iterations", default=None)
 args = parser.parse_args()
 
 # init trainer
