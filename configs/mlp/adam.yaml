@@ -20,10 +20,10 @@ model:
   model_type: mlp
   model_hparams:
     in_features: 784
-    hidden_features: 
-    - 1024
-    - 256
-    - 32
+    hidden_features:
+      - 1024
+      - 256
+      - 32
     out_features: 10
     act_func: relu
     bias: true
@@ -38,7 +38,8 @@ optim:
     lr: 0.001
     weight_decay: 1.0e-4
 
-exp:
-  directed: false
+sharpness:
+  svd: false
   landscape: batch
   layerwise: false
+  frequency: 2

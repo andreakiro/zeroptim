@@ -11,7 +11,7 @@ dataset:
   task: classification
   name: mnist-digits
   params:
-    batch_size: 256
+    batch_size: 128
     shuffle: true
     split: train
 
@@ -37,7 +37,8 @@ optim:
     lr: 0.01
     weight_decay: 1.0e-4
 
-exp:
-  directed: false
+sharpness:
+  svd: false
   landscape: batch
   layerwise: false
+  frequency: 

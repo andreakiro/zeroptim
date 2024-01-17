@@ -118,6 +118,7 @@ class Experimental(BaseModel):
     landscape: Literal["batch", "partial", "full"] = "batch"
     n_batch: int = 10  # used if landscape == "partial"
     layerwise: bool = False
+    frequency: int = 1
 
 
 class Config(BaseModel):
@@ -126,4 +127,4 @@ class Config(BaseModel):
     dataset: DatasetConfig
     model: ModelConfig
     optim: OptimConfig
-    exp: Experimental
+    sharpness: Experimental

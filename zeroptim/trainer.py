@@ -20,6 +20,7 @@ import zeroptim.callbacks.functional as utils
 from zeroptim.optim.mezo import MeZO
 from zeroptim.optim.smartes import SmartES
 from zeroptim.dataset.utils import sample
+from loguru import logger
 
 
 class BaseTrainer(ABC):
@@ -102,7 +103,7 @@ class BaseTrainer(ABC):
         # save final checkpoint to disk
         pth = Path(self.BASE / "checkpoints")
         pth.mkdir(parents=True, exist_ok=True)
-        filename = f"epoch_{metrics['n_epochs']-1}.pt"
+        filename = f"epoch_{metrics['n_epoch']-1}.pt"
         torch.save(self.model.state_dict(), str(pth / filename))
 
     def test(self, test_loader: D.DataLoader) -> Tuple[float, float]:
@@ -200,16 +201,16 @@ class ZeroptimTrainer(BaseTrainer):
         # store model to make it functional for jvp and hvp
         tmp_params, names = utils.make_functional(self.model)
 
-        if self.config.exp.landscape == "batch":
+        if self.config.sharpness.landscape == "batch":
             jvp, vhv = self.metrics_in_batch(
                 inputs, targets, names, prev_params, tangents, func_fwd
             )
-        elif self.config.exp.landscape == "partial":
-            iterator = sample(self.loader, num_batches=self.config.exp.n_batch)
+        elif self.config.sharpness.landscape == "partial":
+            iterator = sample(self.loader, num_batches=self.config.sharpness.n_batch)
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
             )
-        elif self.config.exp.landscape == "full":
+        elif self.config.sharpness.landscape == "full":
             iterator = self.loader
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
@@ -226,20 +227,17 @@ class ZeroptimTrainer(BaseTrainer):
         max_iters: Optional[int | None] = None,
         val_loader: Optional[D.DataLoader] = None,
     ) -> Dict[str, Any]:
-        # initialize metrics
+        # initialize counters
         n_epochs, n_iters = 0, 0
         iters_per_epoch = len(self.loader)  # num batches per epoch
         n_iters_tot = iters_per_epoch * epochs
-        train_loss, val_loss, train_acc = [], [], []
-        train_loss_per_iter, train_acc_per_iter = [], []
-        jvps_per_iter, vhvs_per_iter = [], []
-        layerwise_metrics_per_iter = []
 
         pbar = tqdm(range(n_iters_tot))
+        metrics = {"model": self.model.__class__.__name__.lower()}
 
         self.model.train()
         for epoch_idx in range(epochs):
-            epoch_loss = 0
+            epoch_loss, epoch_acc = 0.0, 0.0
 
             for batch_idx, (inputs, targets) in enumerate(self.loader):
                 if max_iters is not None and n_iters >= max_iters:
@@ -250,94 +248,77 @@ class ZeroptimTrainer(BaseTrainer):
                 outputs = self.model(inputs)
                 loss, prev_params, post_params = self.step_loss(outputs, targets)
                 accuracy = self.compute_accuracy(outputs, targets)
-
-                direction = [p2 - p1 for p2, p1 in zip(post_params, prev_params)]
-                tangents = tuple(
-                    self.svd_filter(direction)
-                    if self.config.exp.directed
-                    else direction
-                )
-
-                jvp, vhv = self.sharpness_hook(inputs, targets, prev_params, tangents)
-
-                layerwise_metrics = {}
-                if self.config.exp.layerwise:
-                    # compute jvp and hvp for each layer
-                    for idx, (name, weights) in enumerate(
-                        self.model.named_parameters()
-                    ):
-                        L_tangent = [torch.zeros_like(v) for v in tangents]
-                        L_tangent[idx] = tangents[idx]
-                        L_tangent = tuple(L_tangent)
-                        L_jvp, L_vhv = self.sharpness_hook(
-                            inputs, targets, prev_params, L_tangent
-                        )
-                        layerwise_metrics["jvp_per_iter_" + name] = L_jvp
-                        layerwise_metrics["vhv_per_iter_" + name] = L_vhv
-                    layerwise_metrics_per_iter.append(layerwise_metrics)
-
-                # append metrics
-                train_loss_per_iter.append(loss.item())
-                train_acc_per_iter.append(accuracy)
-                jvps_per_iter.append(jvp)
-                vhvs_per_iter.append(vhv)
                 epoch_loss += loss.item()
+                epoch_acc += accuracy
 
-                wandb.log(
-                    {
-                        "n_iter": n_iters,
-                        "train_loss_per_iter": train_loss_per_iter[-1],
-                        "train_acc_per_iter": train_acc_per_iter[-1],
-                        "jvp_per_iter": jvps_per_iter[-1],
-                        "vhv_per_iter": vhvs_per_iter[-1],
-                        **layerwise_metrics,
-                    }
-                )
+                per_iter_metrics = {}
+                per_iter_metrics["n_iter"] = n_iters
+                per_iter_metrics["train_loss_per_iter"] = loss.item()
+                per_iter_metrics["train_acc_per_iter"] = accuracy
 
-                # update tqdm progress bar
+                # compute sharpness every other step
+                if (
+                    self.config.sharpness.frequency >= 1
+                    and n_iters % self.config.sharpness.frequency == 0
+                ):
+                    direction = [p2 - p1 for p2, p1 in zip(post_params, prev_params)]
+                    tangents = tuple(
+                        self.svd_filter(direction)
+                        if self.config.sharpness.svd
+                        else direction
+                    )
+
+                    jvp, vhv = self.sharpness_hook(
+                        inputs, targets, prev_params, tangents
+                    )
+
+                    per_iter_metrics["jvp_per_iter"] = jvp
+                    per_iter_metrics["vhv_per_iter"] = vhv
+
+                    if self.config.sharpness.layerwise:
+                        # compute jvp and hvp for each layer
+                        for idx, (name, weights) in enumerate(
+                            self.model.named_parameters()
+                        ):
+                            L_tangent = [torch.zeros_like(v) for v in tangents]
+                            L_tangent[idx] = tangents[idx]
+                            L_tangent = tuple(L_tangent)
+                            L_jvp, L_vhv = self.sharpness_hook(
+                                inputs, targets, prev_params, L_tangent
+                            )
+                            per_iter_metrics["jvp_per_iter_" + name] = L_jvp
+                            per_iter_metrics["vhv_per_iter_" + name] = L_vhv
+
+                # update iters wandb and metrics
+                wandb.log(per_iter_metrics)
+                metrics.setdefault("per_iter", []).append(per_iter_metrics)
+
+                # move progress bar
                 pbar.set_description(
                     f"epoch {epoch_idx+1}/{epochs} iter {n_iters+1}/{n_iters_tot} | train loss {loss.item():.3f}"
                 )
                 pbar.update(1)
                 n_iters += 1
 
-            # append average train loss for current epoch
-            train_loss.append(epoch_loss / iters_per_epoch)
-            train_acc.append(
-                sum(train_acc_per_iter[-iters_per_epoch:]) / iters_per_epoch
-            )
-
-            wandb.log(
-                {
-                    "n_epoch": epoch_idx,
-                    "train_loss_per_epoch": train_loss[-1],
-                    "train_acc_per_epoch": train_acc[-1],
-                }
-            )
+            per_epoch_metrics = {}
+            per_epoch_metrics["n_epoch"] = epoch_idx
+            per_epoch_metrics["train_loss_per_epoch"] = epoch_loss / iters_per_epoch
+            per_epoch_metrics["train_acc_per_epoch"] = epoch_acc / iters_per_epoch
 
             # evaluate on validation set
             if val_loader is not None:
-                val_loss = self.test(val_loader)
-                val_loss.append(val_loss)
+                val_loss, val_acc = self.test(val_loader)
+                per_epoch_metrics["val_loss_per_epoch"] = val_loss
+                per_epoch_metrics["val_acc_per_epoch"] = val_acc
 
+            # update epoch wandb and metrics
+            wandb.log(per_epoch_metrics)
+            metrics.setdefault("per_epoch", []).append(per_epoch_metrics)
             n_epochs += 1
 
-        pbar.close()
+        metrics["n_epoch"] = n_epochs
+        metrics["n_iter"] = n_iters
 
-        metrics = {
-            "model": self.model.__class__.__name__.lower(),
-            # per iters metrics
-            "n_iters": n_iters,
-            "train_loss_per_iter": train_loss_per_iter,
-            "train_acc_per_iter": train_acc_per_iter,
-            "jvps_per_iter": jvps_per_iter,
-            "vhvs_per_iter": vhvs_per_iter,
-            "layerwise_metrics_per_iter": layerwise_metrics_per_iter,
-            # per epoch metrics
-            "n_epochs": n_epochs,
-            "train_loss_per_epoch": train_loss,
-            "train_acc_per_epoch": train_acc,
-            **({"val_loss_per_epoch": val_loss} if val_loss else {}),
-        }
+        pbar.close()
 
         return metrics
