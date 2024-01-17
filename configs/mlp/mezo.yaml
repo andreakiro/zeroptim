@@ -12,7 +12,7 @@ dataset:
   task: classification
   name: mnist-digits
   params:
-    batch_size: 64
+    batch_size: 256
     shuffle: true
     split: train
 
