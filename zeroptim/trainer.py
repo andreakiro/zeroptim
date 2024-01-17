@@ -139,15 +139,19 @@ class ZeroptimTrainer(BaseTrainer):
                 loss.backward()
             return loss
 
-        prev_params = tuple([p.clone().detach() for p in self.model.parameters()])
+        prev_params = self.model.named_parameters()
+        prev_params = [(n, p.clone().detach()) for (n, p) in prev_params]
+
         with_back = not isinstance(self.opt, (MeZO, SmartES))
         loss = self.opt.step(lambda: closure(outputs, targets, with_backward=with_back))
-        post_params = tuple([p.clone().detach() for p in self.model.parameters()])
+
+        post_params = self.model.named_parameters()
+        post_params = [(n, p.clone().detach()) for (n, p) in post_params]
 
         return loss, prev_params, post_params
 
-    def svd_filter(self, tangents, top_k=1):
-        for idx, (name, weights) in enumerate(self.model.named_parameters()):
+    def svd_filter(self, tangents, prev_params, top_k=1):
+        for idx, (name, weights) in enumerate(prev_params):
             if "weight" in name:
                 U, S, Vh = torch.linalg.svd(weights.data)
                 uK, sK, vhK = U[:, :top_k], S[:top_k], Vh[:top_k, :]
@@ -239,7 +243,7 @@ class ZeroptimTrainer(BaseTrainer):
         for epoch_idx in range(epochs):
             epoch_loss, epoch_acc = 0.0, 0.0
 
-            for batch_idx, (inputs, targets) in enumerate(self.loader):
+            for _, (inputs, targets) in enumerate(self.loader):
                 if max_iters is not None and n_iters >= max_iters:
                     break
 
@@ -261,13 +265,17 @@ class ZeroptimTrainer(BaseTrainer):
                     self.config.sharpness.frequency >= 1
                     and n_iters % self.config.sharpness.frequency == 0
                 ):
-                    direction = [p2 - p1 for p2, p1 in zip(post_params, prev_params)]
+                    get_data = lambda named_params: map(lambda x: x[1], named_params)
+                    zipper = zip(get_data(post_params), get_data(prev_params))
+                    direction = [p2 - p1 for p2, p1 in zipper]
+
                     tangents = tuple(
-                        self.svd_filter(direction)
+                        self.svd_filter(direction, prev_params)
                         if self.config.sharpness.svd
                         else direction
                     )
 
+                    prev_params = tuple(get_data(prev_params))
                     jvp, vhv = self.sharpness_hook(
                         inputs, targets, prev_params, tangents
                     )
@@ -277,9 +285,7 @@ class ZeroptimTrainer(BaseTrainer):
 
                     if self.config.sharpness.layerwise:
                         # compute jvp and hvp for each layer
-                        for idx, (name, weights) in enumerate(
-                            self.model.named_parameters()
-                        ):
+                        for idx, (name, _) in enumerate(post_params):
                             L_tangent = [torch.zeros_like(v) for v in tangents]
                             L_tangent[idx] = tangents[idx]
                             L_tangent = tuple(L_tangent)
