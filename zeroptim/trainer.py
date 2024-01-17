@@ -156,7 +156,8 @@ class ZeroptimTrainer(BaseTrainer):
                 U, S, Vh = torch.linalg.svd(weights.data)
                 uK, sK, vhK = U[:, :top_k], S[:top_k], Vh[:top_k, :]
                 # tangents[idx] = s1 * torch.outer(u1, v1)
-                tangents[idx] = (uK * sK) @ vhK
+                topK_singular_space = (uK * sK) @ vhK
+                tangents[idx] = topK_singular_space
 
         return tangents
 
@@ -267,12 +268,12 @@ class ZeroptimTrainer(BaseTrainer):
                 ):
                     get_data = lambda named_params: map(lambda x: x[1], named_params)
                     zipper = zip(get_data(post_params), get_data(prev_params))
-                    direction = [p2 - p1 for p2, p1 in zipper]
+                    delta_W = [p2 - p1 for p2, p1 in zipper]
 
                     tangents = tuple(
-                        self.svd_filter(direction, prev_params)
+                        self.svd_filter(delta_W, prev_params)
                         if self.config.sharpness.svd
-                        else direction
+                        else delta_W
                     )
 
                     prev_params = tuple(get_data(prev_params))
