@@ -147,7 +147,7 @@ def scatter2d_with_regression(
     ax.set_title(title)
 
 
-def scatter_metrics_together(results):
+def scatter_metrics_together(results, bigtitle):
     """Scatter plot of metrics together"""
 
     loss_ = results["train_loss_per_iter"]
@@ -243,6 +243,8 @@ def scatter_metrics_together(results):
         size=5,
     )
 
+    # add title to entire figure
+    fig.suptitle(bigtitle, fontsize=16)
     plt.show()
 
 

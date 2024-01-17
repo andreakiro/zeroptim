@@ -42,13 +42,14 @@ def save_figures(filename):
 
 parser = ArgumentParser()
 parser.add_argument("--filepath", type=str, default=None)
+parser.add_argument("--bigtitle", type=str, default=None)
 parser.add_argument("--save", type=str, default=None)
 args = parser.parse_args()
 
 if __name__ == "__main__":
     filepath = args.filepath or last_result_filepath()
     results = read(filepath)
-    plots.scatter_metrics_together(results)
+    plots.scatter_metrics_together(results, args.bigtitle)
     if args.save:
         save_figures(args.save)
     plt.show(block=True)
