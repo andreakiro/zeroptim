@@ -11,6 +11,9 @@ import torch.optim as optim
 import torch.utils.data as D
 import torch
 
+import zeroptim.utils.plots as plots
+from matplotlib import pyplot as plt
+
 from zeroptim.configs._types import Config
 from zeroptim.dataset._factory import DataLoaderFactory
 from zeroptim.models._factory import ModelFactory
@@ -100,6 +103,12 @@ class BaseTrainer(ABC):
         # save results to disk
         with open(self.BASE / "metrics.json", "w") as f:
             json.dump(metrics, f, indent=4)
+
+        # plot results to disk
+        parsed = plots.parse_raw_metrics(metrics)
+        bigtitle = f"{self.config.optim.optimizer_type} svd={str(self.config.sharpness.svd).lower()} landscape={self.config.sharpness.landscape}"
+        fig = plots.scatter_metrics_together(parsed, bigtitle)
+        fig.savefig(self.BASE / "scatter.png")
 
         # save final checkpoint to disk
         pth = Path(self.BASE / "checkpoints")

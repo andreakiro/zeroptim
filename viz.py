@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 from datetime import datetime
 import matplotlib
-import plots
 import os
+
+from zeroptim.utils.plots import scatter_metrics_together
+from zeroptim.utils.plots import parse_raw_metrics
 
 matplotlib.use("macosx")  # For a native macOS backend
 plt.ion()  # Turn on interactive mode
@@ -40,16 +42,6 @@ def save_figures(filename):
         fig.savefig(filename)
 
 
-def parse_raw_metrics(metrics):
-    parsed = {}
-    m_iter = [m for m in metrics["per_iter"] if "jvp_per_iter" in m.keys()]
-    parsed["train_loss_per_iter"] = list(map(lambda x: x["train_loss_per_iter"], m_iter))
-    parsed["train_acc_per_iter"] = list(map(lambda x: x["train_acc_per_iter"], m_iter))
-    parsed["jvp_per_iter"] = list(map(lambda x: x["jvp_per_iter"], m_iter))
-    parsed["vhv_per_iter"] = list(map(lambda x: x["vhv_per_iter"], m_iter))
-    return parsed
-
-
 parser = ArgumentParser()
 parser.add_argument("--filepath", type=str, default=None)
 parser.add_argument("--bigtitle", type=str, default=None)
@@ -59,7 +51,7 @@ args = parser.parse_args()
 if __name__ == "__main__":
     filepath = args.filepath or last_result_filepath()
     metrics = parse_raw_metrics(read(filepath))
-    plots.scatter_metrics_together(metrics, args.bigtitle)
+    scatter_metrics_together(metrics, args.bigtitle)
     if args.save:
         save_figures(args.save)
     plt.show(block=True)

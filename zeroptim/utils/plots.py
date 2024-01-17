@@ -2,6 +2,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def parse_raw_metrics(metrics):
+    parsed = {}
+    m_iter = [m for m in metrics["per_iter"] if "jvp_per_iter" in m.keys()]
+    parsed["train_loss_per_iter"] = list(
+        map(lambda x: x["train_loss_per_iter"], m_iter)
+    )
+    parsed["train_acc_per_iter"] = list(map(lambda x: x["train_acc_per_iter"], m_iter))
+    parsed["jvp_per_iter"] = list(map(lambda x: x["jvp_per_iter"], m_iter))
+    parsed["vhv_per_iter"] = list(map(lambda x: x["vhv_per_iter"], m_iter))
+    return parsed
+
+
 def plot_loss_and_acc_over_epochs(results):
     """Plot the loss and accuracy over training epochs"""
 
@@ -158,7 +170,7 @@ def scatter_metrics_together(metrics, bigtitle):
     loss_jvps, jvps = filter_metrics_vs_loss(loss_, jvps_)
     loss_vhvs, vhvs = filter_metrics_vs_loss(loss_, vhvs_)
 
-    fig, axs = plt.subplots(2, 3, figsize=(26, 10))
+    fig, axs = plt.subplots(2, 3, figsize=(18, 10))
     cmap = plt.cm.viridis
 
     # FULL TRAINING JVP
@@ -245,7 +257,7 @@ def scatter_metrics_together(metrics, bigtitle):
 
     # add title to entire figure
     fig.suptitle(bigtitle, fontsize=16)
-    plt.show()
+    return fig
 
 
 def scatter_metrics_separate(results):
