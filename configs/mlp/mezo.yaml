@@ -1,7 +1,6 @@
 wandb:
   mode: online
   project_name: zeroptim
-  run_name: null
 
 env:
   device: cpu

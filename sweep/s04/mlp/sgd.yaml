@@ -11,7 +11,7 @@ dataset:
   task: classification
   name: mnist-digits
   params:
-    batch_size: 256
+    batch_size: 128
     shuffle: true
     split: train
 
@@ -32,13 +32,18 @@ model:
 
 optim:
   criterion_type: cross_entropy
-  optimizer_type: adam
+  optimizer_type: sgd
   opt_params:
-    lr: 0.001
+    lr: 0.01
     weight_decay: 1.0e-4
 
 sharpness:
-  svd: false
-  landscape: batch
+  SWEEP.svd:
+    - false
+    - true
+  SWEEP.landscape:
+    - batch
+    - full
+  n_batch: 0
   layerwise: false
-  frequency: 2
+  frequency: 10

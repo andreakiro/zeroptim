@@ -1,44 +1,44 @@
 wandb:
-  mode: online
   project_name: zeroptim
-
+  mode: online
+  run_name: null
+  timestamp: 20240117-161555
 env:
   device: cpu
   dtype: float32
   seed: 42
-
 dataset:
-  task: classification
   name: mnist-digits
   params:
-    batch_size: 256
+    batch_size: 128
     shuffle: true
     split: train
-
+  task: classification
 model:
   model_type: mlp
   model_hparams:
     in_features: 784
     hidden_features:
-      - 1024
-      - 256
-      - 32
+    - 1024
+    - 256
+    - 32
     out_features: 10
     act_func: relu
     bias: true
     p_dropout: 0.0
     use_batch_norm: false
     init: xavier_uniform
-
 optim:
   criterion_type: cross_entropy
-  optimizer_type: adam
+  optimizer_type: sgd
   opt_params:
-    lr: 0.001
-    weight_decay: 1.0e-4
-
+    lr: 0.01
+    weight_decay: 0.0001
+  epsilon: null
+  sub_optimizer_type: null
 sharpness:
   svd: false
-  landscape: batch
+  landscape: full
+  n_batch: 0
   layerwise: false
-  frequency: 2
+  frequency: 10

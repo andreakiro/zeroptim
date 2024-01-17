@@ -38,7 +38,12 @@ optim:
     weight_decay: 1.0e-4
 
 sharpness:
-  svd: false
-  landscape: batch
+  SWEEP.svd:
+    - false
+    - true
+  SWEEP.landscape:
+    - batch
+    - full
+  n_batch: 0
   layerwise: false
-  frequency: 2
+  frequency: 10
