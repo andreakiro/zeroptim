@@ -38,7 +38,7 @@ optim:
     weight_decay: 1.0e-4
 
 sharpness:
-  svd: false
+  svd: true
   landscape: batch
   layerwise: false
-  frequency: 
+  frequency: 1

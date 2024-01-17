@@ -114,7 +114,7 @@ class OptimConfig(BaseModel):
 
 
 class Experimental(BaseModel):
-    directed: bool = False
+    svd: bool = False
     landscape: Literal["batch", "partial", "full"] = "batch"
     n_batch: int = 10  # used if landscape == "partial"
     layerwise: bool = False
