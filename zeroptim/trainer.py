@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, ClassVar, Dict, Any
 from abc import ABC, abstractmethod
+from itertools import chain
 from pathlib import Path
 from tqdm import tqdm
 import wandb
@@ -212,6 +213,7 @@ class ZeroptimTrainer(BaseTrainer):
             )
         elif self.config.sharpness.landscape == "partial":
             iterator = sample(self.loader, num_batches=self.config.sharpness.n_batch)
+            iterator = chain([(inputs, targets)], iterator)
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
             )
