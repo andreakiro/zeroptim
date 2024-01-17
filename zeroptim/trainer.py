@@ -149,10 +149,10 @@ class ZeroptimTrainer(BaseTrainer):
     def svd_filter(self, tangents, top_k=1):
         for idx, (name, weights) in enumerate(self.model.named_parameters()):
             if "weight" in name:
-                U, S, V = torch.linalg.svd(weights.data)
-                uK, sK, vK = U[:, :top_k], S[:top_k], V[:, :top_k]
+                U, S, Vh = torch.linalg.svd(weights.data)
+                uK, sK, vhK = U[:, :top_k], S[:top_k], Vh[:top_k, :]
                 # tangents[idx] = s1 * torch.outer(u1, v1)
-                tangents[idx] = (uK * sK) @ vK.T
+                tangents[idx] = (uK * sK) @ vhK
 
         return tangents
 
