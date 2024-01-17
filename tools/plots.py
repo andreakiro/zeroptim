@@ -138,7 +138,7 @@ def scatter2d_with_regression(
     """Scatter plot with regression line on a matplotlib axis"""
     slope, intercept = np.polyfit(xs, ys, 1)
     regression = np.array(xs) * slope + intercept
-    slope_str = f"slope: {round(slope, 0)}"
+    slope_str = f"slope: {round(slope, 3)}"
     ax.scatter(xs, ys, s=size, c=colors, marker=marker)
     ax.plot(xs, regression, color=color_regression, label=slope_str)
     ax.set_xlabel(xlabel)
@@ -147,12 +147,12 @@ def scatter2d_with_regression(
     ax.set_title(title)
 
 
-def scatter_metrics_together(results, bigtitle):
+def scatter_metrics_together(metrics, bigtitle):
     """Scatter plot of metrics together"""
 
-    loss_ = results["train_loss_per_iter"]
-    jvps_ = results["jvps_per_iter"]
-    vhvs_ = results["vhvs_per_iter"]
+    loss_ = metrics["train_loss_per_iter"]
+    jvps_ = metrics["jvp_per_iter"]
+    vhvs_ = metrics["vhv_per_iter"]
 
     # Remove outliers
     loss_jvps, jvps = filter_metrics_vs_loss(loss_, jvps_)
