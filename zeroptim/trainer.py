@@ -115,7 +115,7 @@ class BaseTrainer(ABC):
         pth.mkdir(parents=True, exist_ok=True)
         filename = f"epoch_{metrics['n_epoch']-1}.pt"
         torch.save(self.model.state_dict(), str(pth / filename))
-        
+
         return metrics
 
     def test(self, test_loader: D.DataLoader) -> Tuple[float, float]:
@@ -256,6 +256,7 @@ class ZeroptimTrainer(BaseTrainer):
         self.model.train()
         for epoch_idx in range(epochs):
             epoch_loss, epoch_acc = 0.0, 0.0
+            prev_loss_sharpness = 0.0
 
             for _, (inputs, targets) in enumerate(self.loader):
                 if max_iters is not None and n_iters >= max_iters:
@@ -274,13 +275,17 @@ class ZeroptimTrainer(BaseTrainer):
                 per_iter_metrics["train_loss_per_iter"] = loss.item()
                 per_iter_metrics["train_acc_per_iter"] = accuracy
 
-                # compute sharpness every other step
                 if (
                     self.config.sharpness.frequency >= 1
                     and n_iters % self.config.sharpness.frequency == 0
                 ):
-                    get_data = lambda named_params: map(lambda x: x[1], named_params)
-                    zipper = zip(get_data(post_params), get_data(prev_params))
+                    # compute sharpness every other step
+                    get_params_data = lambda named_params: map(
+                        lambda x: x[1], named_params
+                    )
+                    zipper = zip(
+                        get_params_data(post_params), get_params_data(prev_params)
+                    )
                     delta_W = [p2 - p1 for p2, p1 in zipper]
 
                     tangents = tuple(
@@ -289,13 +294,15 @@ class ZeroptimTrainer(BaseTrainer):
                         else delta_W
                     )
 
-                    prev_params = tuple(get_data(prev_params))
+                    prev_params = tuple(get_params_data(prev_params))
                     jvp, vhv = self.sharpness_hook(
                         inputs, targets, prev_params, tangents
                     )
 
                     per_iter_metrics["jvp_per_iter"] = jvp
                     per_iter_metrics["vhv_per_iter"] = vhv
+                    per_iter_metrics["delta_loss"] = loss.item() - prev_loss_sharpness
+                    prev_loss_sharpness = loss.item()
 
                     if self.config.sharpness.layerwise:
                         # compute jvp and hvp for each layer
