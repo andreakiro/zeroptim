@@ -107,14 +107,16 @@ class BaseTrainer(ABC):
         # plot results to disk
         parsed = plots.parse_raw_metrics(metrics)
         bigtitle = f"{self.config.optim.optimizer_type} svd={str(self.config.sharpness.svd).lower()} landscape={self.config.sharpness.landscape}"
-        fig = plots.scatter_metrics_together(parsed, bigtitle)
-        fig.savefig(self.BASE / "scatter.png")
+        # fig = plots.scatter_metrics_together(parsed, bigtitle)
+        # fig.savefig(self.BASE / "scatter.png")
 
         # save final checkpoint to disk
         pth = Path(self.BASE / "checkpoints")
         pth.mkdir(parents=True, exist_ok=True)
         filename = f"epoch_{metrics['n_epoch']-1}.pt"
         torch.save(self.model.state_dict(), str(pth / filename))
+        
+        return metrics
 
     def test(self, test_loader: D.DataLoader) -> Tuple[float, float]:
         self.model.eval()
@@ -227,7 +229,7 @@ class ZeroptimTrainer(BaseTrainer):
                 iterator, names, prev_params, tangents, func_fwd
             )
         elif self.config.sharpness.landscape == "full":
-            iterator = self.loader
+            iterator = torch.utils.data.DataLoader(**vars(self.loader))
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
             )
