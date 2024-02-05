@@ -5,10 +5,9 @@ import numpy as np
 def parse_raw_metrics(metrics):
     parsed = {}
     m_iter = [m for m in metrics["per_iter"] if "jvp_per_iter" in m.keys()]
-    parsed["train_loss_per_iter"] = list(
-        map(lambda x: x["train_loss_per_iter"], m_iter)
+    parsed["delta_loss_per_iter"] = list(
+        map(lambda x: x["delta_loss_per_iter"], m_iter)
     )
-    parsed["train_acc_per_iter"] = list(map(lambda x: x["train_acc_per_iter"], m_iter))
     parsed["jvp_per_iter"] = list(map(lambda x: x["jvp_per_iter"], m_iter))
     parsed["vhv_per_iter"] = list(map(lambda x: x["vhv_per_iter"], m_iter))
     return parsed
@@ -108,8 +107,8 @@ def plot_jpv_and_hvp_over_iters(results):
 
 def remove_outliers(data):
     data = np.array(data)
-    q1 = np.percentile(data, 25)
-    q3 = np.percentile(data, 75)
+    q1 = np.percentile(data, 10)
+    q3 = np.percentile(data, 90)
     iqr = q3 - q1
     lower_bound = q1 - (1.5 * iqr)
     upper_bound = q3 + (1.5 * iqr)
@@ -162,13 +161,17 @@ def scatter2d_with_regression(
 def scatter_metrics_together(metrics, bigtitle):
     """Scatter plot of metrics together"""
 
-    loss_ = metrics["train_loss_per_iter"]
+    loss_ = metrics["delta_loss_per_iter"]
     jvps_ = metrics["jvp_per_iter"]
     vhvs_ = metrics["vhv_per_iter"]
 
     # Remove outliers
     loss_jvps, jvps = filter_metrics_vs_loss(loss_, jvps_)
     loss_vhvs, vhvs = filter_metrics_vs_loss(loss_, vhvs_)
+
+    # Dont remove outliers
+    # loss_jvps, jvps = loss_, jvps_
+    # loss_vhvs, vhvs = loss_, vhvs_
 
     fig, axs = plt.subplots(2, 3, figsize=(18, 10))
     cmap = plt.cm.viridis
@@ -179,9 +182,9 @@ def scatter_metrics_together(metrics, bigtitle):
         axs[0, 0],
         jvps,
         loss_jvps,
-        title="loss vs. jvp (full training)",
+        title="delta loss vs. jvp (full training)",
         xlabel="jvp value",
-        ylabel="loss",
+        ylabel="delta loss",
         colors=colors,
         size=5,
     )
@@ -192,9 +195,9 @@ def scatter_metrics_together(metrics, bigtitle):
         axs[1, 0],
         vhvs,
         loss_vhvs,
-        title="loss vs. vhv (full training)",
+        title="delta loss vs. vhv (full training)",
         xlabel="vhv value",
-        ylabel="loss",
+        ylabel="delta loss",
         colors=colors,
         size=5,
     )
@@ -206,9 +209,9 @@ def scatter_metrics_together(metrics, bigtitle):
         axs[0, 1],
         jvps[:h],
         loss_jvps[:h],
-        title="loss vs. jvp (early training)",
+        title="delta loss vs. jvp (early training)",
         xlabel="jvp value",
-        ylabel="loss",
+        ylabel="delta loss",
         colors=colors,
         size=5,
     )
@@ -220,9 +223,9 @@ def scatter_metrics_together(metrics, bigtitle):
         axs[1, 1],
         vhvs[:h],
         loss_vhvs[:h],
-        title="loss vs. vhv (early training)",
+        title="delta loss vs. vhv (early training)",
         xlabel="vhv value",
-        ylabel="loss",
+        ylabel="delta loss",
         colors=colors,
         size=5,
     )
@@ -234,9 +237,9 @@ def scatter_metrics_together(metrics, bigtitle):
         axs[0, 2],
         jvps[h:],
         loss_jvps[h:],
-        title="loss vs. jvp (late training)",
+        title="delta loss vs. jvp (late training)",
         xlabel="jvp value",
-        ylabel="loss",
+        ylabel="delta loss",
         colors=colors,
         size=5,
     )
@@ -248,9 +251,9 @@ def scatter_metrics_together(metrics, bigtitle):
         axs[1, 2],
         vhvs[h:],
         loss_vhvs[h:],
-        title="loss vs. vhv (late training)",
+        title="delta loss vs. vhv (late training)",
         xlabel="vhv value",
-        ylabel="loss",
+        ylabel="delta loss",
         colors=colors,
         size=5,
     )
