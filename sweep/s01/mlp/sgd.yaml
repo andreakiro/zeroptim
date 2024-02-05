@@ -44,5 +44,5 @@ exp:
   SWEEP.landscape:
     - batch
     - partial
-  n_batch: 10
+  n_add_batch: 10
   layerwise: false

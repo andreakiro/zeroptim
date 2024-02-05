@@ -39,5 +39,5 @@ optim:
 exp:
   directed: true
   landscape: batch
-  n_batch: 10
+  n_add_batch: 10
   layerwise: false

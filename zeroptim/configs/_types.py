@@ -116,7 +116,7 @@ class OptimConfig(BaseModel):
 class Experimental(BaseModel):
     svd: bool = False
     landscape: Literal["batch", "partial", "full"] = "batch"
-    n_batch: int = 10  # used if landscape == "partial"
+    n_add_batch: int = 10  # used if landscape == "partial"
     layerwise: bool = False
     frequency: int = 1
 

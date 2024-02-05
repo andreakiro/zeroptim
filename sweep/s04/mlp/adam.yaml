@@ -44,6 +44,6 @@ sharpness:
   SWEEP.landscape:
     - batch
     - full
-  n_batch: 0
+  n_add_batch: 0
   layerwise: false
   frequency: 10

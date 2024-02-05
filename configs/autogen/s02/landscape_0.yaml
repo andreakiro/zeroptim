@@ -39,5 +39,5 @@ optim:
 exp:
   directed: false
   landscape: partial
-  n_batch: 1
+  n_add_batch: 1
   layerwise: false

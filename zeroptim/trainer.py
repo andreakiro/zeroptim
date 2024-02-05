@@ -224,7 +224,7 @@ class ZeroptimTrainer(BaseTrainer):
                 inputs, targets, names, prev_params, tangents, func_fwd
             )
         elif self.config.sharpness.landscape == "partial":
-            iterator = sample(self.loader, num_batches=self.config.sharpness.n_batch)
+            iterator = sample(self.loader, num_batches=self.config.sharpness.n_add_batch)
             iterator = chain([(inputs, targets)], iterator)
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
@@ -287,9 +287,9 @@ class ZeroptimTrainer(BaseTrainer):
                     zipper = zip(
                         get_params_data(post_params), get_params_data(prev_params)
                     )
-                    delta_W = [p2 - p1 for p2, p1 in zipper]
 
-                    tangents = tuple(
+                    delta_W = [p2 - p1 for p2, p1 in zipper]
+                    delta_W = tuple(
                         self.svd_filter(delta_W, prev_params)
                         if self.config.sharpness.svd
                         else delta_W
@@ -297,7 +297,7 @@ class ZeroptimTrainer(BaseTrainer):
 
                     prev_params = tuple(get_params_data(prev_params))
                     jvp, vhv = self.sharpness_hook(
-                        inputs, targets, prev_params, tangents
+                        inputs, targets, prev_params, delta_W
                     )
 
                     per_iter_metrics["jvp_per_iter"] = jvp
@@ -308,11 +308,11 @@ class ZeroptimTrainer(BaseTrainer):
                     if self.config.sharpness.layerwise:
                         # compute jvp and hvp for each layer
                         for idx, (name, _) in enumerate(post_params):
-                            L_tangent = [torch.zeros_like(v) for v in tangents]
-                            L_tangent[idx] = tangents[idx]
-                            L_tangent = tuple(L_tangent)
+                            L_delta_W = [torch.zeros_like(v) for v in delta_W]
+                            L_delta_W[idx] = delta_W[idx]
+                            L_delta_W = tuple(L_delta_W)
                             L_jvp, L_vhv = self.sharpness_hook(
-                                inputs, targets, prev_params, L_tangent
+                                inputs, targets, prev_params, L_delta_W
                             )
                             per_iter_metrics["jvp_per_iter_" + name] = L_jvp
                             per_iter_metrics["vhv_per_iter_" + name] = L_vhv
