@@ -86,7 +86,8 @@ class BaseTrainer(ABC):
         max_iters: Optional[int | None] = None,
         val_loader: Optional[D.DataLoader] = None,
     ) -> None:
-        self.activate_wnb()
+        if self.config.wandb.mode == "online":
+            self.activate_wnb()
 
         # initialize output directory
         rn = self.config.wandb.run_name
@@ -317,7 +318,8 @@ class ZeroptimTrainer(BaseTrainer):
                             per_iter_metrics["vhv_per_iter_" + name] = L_vhv
 
                 # update iters wandb and metrics
-                wandb.log(per_iter_metrics)
+                if self.config.wandb.mode == "online":
+                    wandb.log(per_iter_metrics)
                 metrics.setdefault("per_iter", []).append(per_iter_metrics)
 
                 # move progress bar
@@ -339,7 +341,8 @@ class ZeroptimTrainer(BaseTrainer):
                 per_epoch_metrics["val_acc_per_epoch"] = val_acc
 
             # update epoch wandb and metrics
-            wandb.log(per_epoch_metrics)
+            if self.config.wandb.mode == "online":
+                wandb.log(per_epoch_metrics)
             metrics.setdefault("per_epoch", []).append(per_epoch_metrics)
             n_epochs += 1
 
