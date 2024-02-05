@@ -108,8 +108,8 @@ class BaseTrainer(ABC):
         # plot results to disk
         parsed = plots.parse_raw_metrics(metrics)
         bigtitle = f"{self.config.optim.optimizer_type} svd={str(self.config.sharpness.svd).lower()} landscape={self.config.sharpness.landscape}"
-        # fig = plots.scatter_metrics_together(parsed, bigtitle)
-        # fig.savefig(self.BASE / "scatter.png")
+        fig = plots.scatter_metrics_together(parsed, bigtitle)
+        fig.savefig(self.BASE / "scatter.png")
 
         # save final checkpoint to disk
         pth = Path(self.BASE / "checkpoints")
@@ -224,13 +224,18 @@ class ZeroptimTrainer(BaseTrainer):
                 inputs, targets, names, prev_params, tangents, func_fwd
             )
         elif self.config.sharpness.landscape == "partial":
-            iterator = sample(self.loader, num_batches=self.config.sharpness.n_add_batch)
+            iterator = sample(
+                self.loader, num_batches=self.config.sharpness.n_add_batch
+            )
             iterator = chain([(inputs, targets)], iterator)
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
             )
         elif self.config.sharpness.landscape == "full":
-            iterator = torch.utils.data.DataLoader(**vars(self.loader))
+            iterator = torch.utils.data.DataLoader(
+                dataset=self.loader.dataset,
+                batch_size=self.loader.batch_size
+            )
             jvp, vhv = self.metrics_in_landscape(
                 iterator, names, prev_params, tangents, func_fwd
             )
@@ -302,7 +307,9 @@ class ZeroptimTrainer(BaseTrainer):
 
                     per_iter_metrics["jvp_per_iter"] = jvp
                     per_iter_metrics["vhv_per_iter"] = vhv
-                    per_iter_metrics["delta_loss"] = loss.item() - prev_loss_sharpness
+                    per_iter_metrics["delta_loss_per_iter"] = (
+                        loss.item() - prev_loss_sharpness
+                    )
                     prev_loss_sharpness = loss.item()
 
                     if self.config.sharpness.layerwise:
