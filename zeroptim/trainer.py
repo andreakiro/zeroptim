@@ -44,6 +44,11 @@ class BaseTrainer(ABC):
         self.opt = optimizer
         self.crit = criterion
         self.config = run_config
+        self.val_loader = torch.utils.data.DataLoader(
+            dataset=self.loader.dataset,
+            batch_size=self.loader.batch_size,
+            shuffle=False
+        )
 
     @classmethod
     def from_config(cls, config: Config) -> "BaseTrainer":
@@ -134,7 +139,8 @@ class BaseTrainer(ABC):
                 loss = self.crit(outputs, targets)
                 total_loss += loss.item() * inputs.size(0)
                 total_samples += inputs.size(0)
-                correct_predictions += (outputs == targets).sum().item()
+                _, predicted = outputs.max(1)  # Get the index of the max log-probability
+                correct_predictions += predicted.eq(targets).sum().item()
 
         avg_loss = total_loss / total_samples
         avg_accuracy = 100 * correct_predictions / total_samples
@@ -305,12 +311,13 @@ class ZeroptimTrainer(BaseTrainer):
                         inputs, targets, prev_params, delta_W
                     )
 
+                    test_loss, test_acc = self.test(self.val_loader)
                     per_iter_metrics["jvp_per_iter"] = jvp
                     per_iter_metrics["vhv_per_iter"] = vhv
                     per_iter_metrics["delta_loss_per_iter"] = (
-                        loss.item() - prev_loss_sharpness
+                        test_loss - prev_loss_sharpness
                     )
-                    prev_loss_sharpness = loss.item()
+                    prev_loss_sharpness = test_loss
 
                     if self.config.sharpness.layerwise:
                         # compute jvp and hvp for each layer

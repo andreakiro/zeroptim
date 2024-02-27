@@ -107,8 +107,8 @@ def plot_jpv_and_hvp_over_iters(results):
 
 def remove_outliers(data):
     data = np.array(data)
-    q1 = np.percentile(data, 10)
-    q3 = np.percentile(data, 90)
+    q1 = np.percentile(data, 5)
+    q3 = np.percentile(data, 95)
     iqr = q3 - q1
     lower_bound = q1 - (1.5 * iqr)
     upper_bound = q3 + (1.5 * iqr)
