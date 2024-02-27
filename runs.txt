@@ -1,0 +1,3 @@
+- SGD run: https://wandb.ai/filtro-ai/zeroptim/runs/7etq8kmt?workspace=user-andreakiro
+- Adam run: https://wandb.ai/filtro-ai/zeroptim/runs/4edfhml5?workspace=user-andreakiro
+- Mezo run: https://wandb.ai/filtro-ai/zeroptim/runs/lq7he94c?workspace=user-andreakiro
